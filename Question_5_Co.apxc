@@ -1,0 +1,35 @@
+public class AccountHierarchyValidator {
+
+    public Boolean IsValidHierarchy(String companyAccountId) {
+        // Query the company account and its hierarchy
+        Account companyAccount = [SELECT Id, RecordType.Name, (SELECT Id, RecordType.Name, (SELECT Id, RecordType.Name FROM ChildAccounts WHERE RecordType.Name = 'Section') FROM ChildAccounts WHERE RecordType.Name = 'Division') FROM Account WHERE Id = :companyAccountId AND RecordType.Name = 'Company' LIMIT 1];
+
+        // If the root account is not a company, return false
+        if (companyAccount == null || companyAccount.RecordType.Name != 'Company') {
+            return false;
+        }
+
+        // Validate the hierarchy
+        for (Account division : companyAccount.ChildAccounts) {
+            if (division.RecordType.Name != 'Division') {
+                return false;
+            }
+            for (Account section : division.ChildAccounts) {
+                if (section.RecordType.Name != 'Section') {
+                    return false;
+                }
+            }
+        }
+
+        // Validate contacts linked to the correct account record types
+        List<AccountContactRelationship> acrList = [SELECT Contact.Type, Account.RecordType.Name, IsActive FROM AccountContactRelationship WHERE AccountId IN (SELECT Id FROM Account WHERE ParentId = :companyAccountId OR Id = :companyAccountId) AND IsActive = TRUE];
+        
+        for (AccountContactRelationship acr : acrList) {
+            if (acr.Contact.Type != acr.Account.RecordType.Name) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
